@@ -1,0 +1,168 @@
+@startuml
+
+' --- GENEL GÖRÜNÜM AYARLARI ---
+skinparam classAttributeIconSize 0
+skinparam linetype ortho
+skinparam handwritten false
+skinparam roundcorner 10
+skinparam shadowng true
+
+' --- RENK PALETİ ---
+!define ModelColor #E8F5E9
+!define ServiceColor #E3F2FD
+!define ControllerColor #FFF3E0
+!define PatternColor #F3E5F5
+!define DTOColor #FAFAFA
+
+' ==========================================
+' 1. MODEL KATMANI (Veritabanı Nesneleri)
+' ==========================================
+package "com.inventory.model" {
+    abstract class InventoryComponent <<Entity>> #ModelColor {
+        - Long id
+        - String name
+    }
+
+    class Product <<Entity>> #ModelColor {
+        - double price
+        - int stock
+    }
+
+    class Category <<Entity>> #ModelColor {
+        + void add(InventoryComponent)
+    }
+
+    class User <<Entity>> #ModelColor {
+        - String username
+        - String email
+        - boolean isAdmin
+    }
+
+    class Order <<Entity>> #ModelColor {
+        - LocalDateTime orderDate
+        - double totalAmount
+    }
+
+    class Notification <<Entity>> #ModelColor {
+        - String message
+        - LocalDateTime date
+    }
+
+    class ShoppingCart <<Non-Entity>> #ModelColor {
+        - List<Product> items
+        + void addItem(Product)
+    }
+}
+
+' ==========================================
+' 2. PATTERN KATMANI (Observer & Strategy)
+' ==========================================
+package "com.inventory.patterns" {
+    
+    ' Observer Pattern
+    interface StockObserver <<Interface>> #PatternColor {
+        + void update(Product product)
+    }
+
+    ' Strategy Pattern
+    interface PricingStrategy <<Interface>> #PatternColor {
+        + double calculate(double price)
+    }
+
+    class RegularPricingStrategy #PatternColor implements PricingStrategy
+    class DiscountPricingStrategy #PatternColor implements PricingStrategy
+}
+
+' ==========================================
+' 3. SERVICE KATMANI (İş Mantığı)
+' ==========================================
+package "com.inventory.service" {
+    class ProductService <<Service>> #ServiceColor {
+        - List<StockObserver> observers
+        + Product addProduct(...)
+        + void updateStock(...)
+    }
+
+    class OrderService <<Service>> #ServiceColor {
+        + double calculateTotal(...)
+        + Order checkout(User, ShoppingCart, PricingStrategy)
+    }
+
+    class CategoryService <<Service>> #ServiceColor {
+        + Category saveCategory(...)
+        + Category addSubCategory(...)
+    }
+}
+
+' ==========================================
+' 4. CONTROLLER KATMANI (API Uçları)
+' ==========================================
+package "com.inventory.controller" {
+    class UserController <<RestController>> #ControllerColor {
+        + createUser()
+        + getAllUsers()
+    }
+
+    class ProductController <<RestController>> #ControllerColor {
+        + addProduct()
+        + updateStock()
+    }
+
+    class CategoryController <<RestController>> #ControllerColor {
+        + createCategory()
+        + createSubCategory()
+    }
+
+    class NotificationController <<RestController>> #ControllerColor {
+        + getAllNotifications()
+    }
+
+    class OrderController <<RestController>> #ControllerColor {
+        - RegularPricingStrategy regularStrategy
+        - DiscountPricingStrategy discountStrategy
+        + checkout(CheckoutRequest)
+    }
+
+    class CheckoutRequest <<DTO>> #DTOColor {
+        + Long userId
+        + List<Long> productIds
+        + String strategyType
+    }
+}
+
+' ==========================================
+' 5. İLİŞKİLER (BAĞLANTILAR)
+' ==========================================
+
+' --- Model İlişkileri (Inheritance & Composition) ---
+InventoryComponent <|-- Product
+InventoryComponent <|-- Category
+Category *-- "*" InventoryComponent : contains >
+Order "1" --> "1" User
+Order "*" --> "*" Product
+ShoppingCart o-- "*" Product
+
+' --- Controller -> Service Bağlantıları ---
+ProductController ..> ProductService : uses >
+CategoryController ..> CategoryService : uses >
+OrderController ..> OrderService : uses >
+
+' --- Controller -> Model/Repo (Doğrudan Bağlantılar) ---
+UserController ..> User : uses (via Repo) >
+NotificationController ..> Notification : uses (via Repo) >
+
+' --- DTO Bağlantısı ---
+OrderController +-- CheckoutRequest : (Inner Class)
+
+' --- Pattern Bağlantıları (Strateji ve Observer) ---
+' 1. Observer: ProductService gözlemcileri tutar
+ProductService o-right- "*" StockObserver : notifies >
+
+' 2. Strategy: OrderController stratejileri seçer
+OrderController ..> RegularPricingStrategy : injects >
+OrderController ..> DiscountPricingStrategy : injects >
+
+' 3. Strategy: OrderService strateji arayüzünü kullanır
+OrderService ..> PricingStrategy : executes logic >
+
+@enduml
